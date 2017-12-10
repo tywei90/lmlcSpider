@@ -39,8 +39,12 @@ Date.prototype.format = function(format) {
     return format;
 }
 
-let initialTime = +new Date();
+if(!fs.existsSync('./data')){
+    fs.mkdirSync('./data/');
+}
+
 // 定时器，每天00:05分的时候写入当天的数据
+let initialTime = +new Date();
 let globalTimer = setInterval(function(){
     let nowTime = +new Date();
     let nowStr = (new Date()).format("hh:mm:ss");
