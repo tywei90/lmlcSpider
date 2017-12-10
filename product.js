@@ -64,8 +64,6 @@ function formatData(data){
         obj.productId = data[i].id;
         obj.yearReturnRate = data[i].yearReturnRate;
         obj.investementDays = data[i].investementDays;
-        obj.buyStartTime = data[i].buyStartTime;
-        obj.buyEndTime = data[i].buyEndTime;
         obj.interestStartTime = data[i].interestStartTime;
         obj.interestEndTime = data[i].interestEndTime;
         obj.getDataTime = +new Date();
