@@ -45,8 +45,8 @@ let globalTimer = setInterval(function(){
     let nowTime = +new Date();
     let nowStr = (new Date()).format("hh:mm:ss");
     let max = nowTime - 5*60*1000;
-    let min = nowTime - 5*60*1000 - 20*60*1000;
-    if(nowStr === "14:35:00" && (nowTime - initialTime >= 20*60*1000 + 5*60*1000)){
+    let min = nowTime - 5*60*1000 - 24*60*60*1000;
+    if(nowStr === "00:05:00" && (nowTime - initialTime >= 5*60*1000 + 24*60*60*1000)){
         let prod = JSON.parse(fs.readFileSync('./data/prod.json', 'utf-8'));
         let user = JSON.parse(fs.readFileSync('./data/user.json', 'utf-8'));
         let lmlc = JSON.parse(JSON.stringify(prod));
@@ -86,9 +86,9 @@ let globalTimer = setInterval(function(){
             "productType": 6,
             "records": []
         });
+        let delArr = [];
         // 筛选user数据
         for(let i=0, len=user.length; i<len; i++){
-            let delArr = [];
             if(user[i].productId === "jsfund" && user[i].buyTime >= min && user[i].buyTime < max){
                 lmlc[0].records.push({
                     "username": user[i].username,
@@ -152,7 +152,9 @@ function getCookie() {
         })
         .end(function(err, res) {
             if (err) {
+                let time = (new Date()).format("yyyy-MM-dd hh:mm:ss");
                 console.log(err.message.error);
+                fs.appendFileSync('debug.txt', `\n\n${err.message.error}, 发生于：${time}`);
                 return;
             }
             cookie = res.header['set-cookie']; //从response中得到cookie
@@ -196,8 +198,10 @@ function requestData() {
     .end(function(err,pres){
         // 常规的错误处理
         if (err) {
-          console.log(err.message.error);
-          return;
+            let time = (new Date()).format("yyyy-MM-dd hh:mm:ss");
+            console.log(err.message.error);
+            fs.appendFileSync('debug.txt', `\n\n${err.message.error}, 发生于：${time}`);
+            return;
         }
         let addData = JSON.parse(pres.text).data;
         let pageUrls = [];
@@ -218,7 +222,7 @@ function requestData() {
                 if(formatedAddData[i].productId === oldData[j].productId){
                     isNewProduct = false;
                     let lenx = oldData[j].amounts.length;
-                    if(formatedAddData[i].amounts[0].alreadyBuyAmount !== oldData[j].amounts[lenx-1].alreadyBuyAmount){
+                    if(!lenx || formatedAddData[i].amounts[0].alreadyBuyAmount !== oldData[j].amounts[lenx-1].alreadyBuyAmount){
                         oldData[j].amounts.push(formatedAddData[i].amounts[0]);
                     }
                 }
@@ -342,8 +346,10 @@ function requestData1() {
     .end(function(err,pres){
         // 常规的错误处理
         if (err) {
-          console.log(err.message.error);
-          return;
+            let time = (new Date()).format("yyyy-MM-dd hh:mm:ss");
+            console.log(err.message.error);
+            fs.appendFileSync('debug.txt', `\n\n${err.message.error}, 发生于：${time}`);
+            return;
         }
         let newData = JSON.parse(pres.text).data;
         let formatNewData = formatData1(newData);
