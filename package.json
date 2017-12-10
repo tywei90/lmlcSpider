@@ -16,7 +16,8 @@
   "scripts": {
     "user": "pm2 start user.js",
     "product": "pm2 start product.js",
-    "record": "pm2 start record.js"
+    "record": "pm2 start record.js",
+    "lmlc": "pm2 start lmlc.js -x -- "
   },
   "repository": {
     "type": "git",
