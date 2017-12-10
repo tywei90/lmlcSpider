@@ -38,8 +38,8 @@ Date.prototype.format = function(format) {
 }
 
 let counter = 0;
-let total = 4*60*60/180; // 爬取的次数，为0则一直爬取
-let delay = 180*1000; // 后台数据三分钟更新一次，所以这中间如果购买人超过10个的话，会漏掉这部分数据
+let total = 0; // 爬取的次数，为0则一直爬取
+let delay = 150*1000; // 后台数据三分钟更新一次，所以这中间如果购买人超过10个的话，会漏掉这部分数据
 let ajaxUrl = 'https://www.lmlc.com/s/web/home/user_buying';
 
 if(!fs.existsSync('user.json')){
@@ -80,7 +80,7 @@ function requestData(url) {
             fs.writeFile('user.json', JSON.stringify(formatNewData), (err) => {
                 if (err) throw err;
                 let time = (new Date()).format("yyyy-MM-dd hh:mm:ss");
-                console.log((`=============== 第${counter}次爬取，时间：${time} ===============`).silly);
+                console.log((`第${counter}次爬取首页用户购买ajax完毕，时间：${time}`).silly);
             });
         }else{
             let oldData = JSON.parse(data);
@@ -113,7 +113,7 @@ function requestData(url) {
             fs.writeFile('user.json', JSON.stringify(oldData.concat(addData)), (err) => {
                 if (err) throw err;
                 let time = (new Date()).format("yyyy-MM-dd hh:mm:ss");
-                console.log((`=============== 第${counter}次爬取，时间：${time} ===============`).silly);
+                console.log((`第${counter}次爬取首页用户购买ajax完毕，时间：${time}`).silly);
             });
         }
     });
