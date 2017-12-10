@@ -1,6 +1,7 @@
 let superagent = require('superagent-charset'),
     fs = require('fs'),
     cheerio = require("cheerio"),
+    async = require("async"),
     colors = require('colors');
 
 // node后台log颜色设置
@@ -38,13 +39,19 @@ Date.prototype.format = function(format) {
     return format;
 }
 
-let counter = 0;
-let total = 1; // 爬取的次数，为0则一直爬取
-let delay = 5000;
-let ajaxUrl = 'https://www.lmlc.com/web/product/product_list?pageSize=10&pageNo=1&type=0';
+var cookie = process.argv.slice(2)[0];
+if(!cookie){
+    console.log('参数错误，需要传递cookie参数'.error);
+    return
+}
 
-if(!fs.existsSync('records.json') || !fs.readFileSync('records.json', 'utf-8')){
-    fs.writeFileSync('records.json', JSON.stringify([]));
+let counter = 0;
+let total = 0; // 爬取的次数，为0则一直爬取
+let delay = 60*1000;
+let ajaxUrl = 'https://www.lmlc.com/web/product/product_list?pageSize=100&pageNo=1&type=0';
+
+if(!fs.existsSync('record.json') || !fs.readFileSync('record.json', 'utf-8')){
+    fs.writeFileSync('record.json', JSON.stringify([]));
 }
 
 let timer = setInterval(function() {
@@ -53,58 +60,89 @@ let timer = setInterval(function() {
 
 requestData(ajaxUrl);
 
-function formatData(data){
-    let outArr = [];
-    for(let i=0, len=data.length; i<len; i++){
-        let obj = {};
-        obj.name = data[i].name;
-        obj.financeTotalAmount = data[i].financeTotalAmount;
-        obj.alreadyBuyAmount = data[i].alreadyBuyAmount;
-        obj.canBuyAmount = data[i].canBuyAmount;
-        obj.productId = data[i].id;
-        obj.yearReturnRate = data[i].yearReturnRate;
-        obj.investementDays = data[i].investementDays;
-        obj.buyStartTime = data[i].buyStartTime;
-        obj.buyEndTime = data[i].buyEndTime;
-        obj.interestStartTime = data[i].interestStartTime;
-        obj.interestEndTime = data[i].interestEndTime;
-        obj.getDataTime = +new Date();
-        outArr.push(obj);
-    }
-    return outArr
-}
 
 function requestData(url) {
+    let pageUrls = [];
+    let outArr = [];
     counter++;
     if(total && counter == total){
         clearInterval(timer);
     }
     superagent
         .get(url)
-        .set('Cookie', 'NTES_SESS=ZyH7BreEp6estM8FceDLa6BjSFevqWVeI_A.gJJbaFzuCIEACNjlM8xr1pd5gKAApfM32tYZpYcOGU32DB1eyogil0tHZNO5fz27LBY1Ksh4ZipIK3dT3Y_HcdQASWb9g2J5R6sMH34yaD9y5kiFR0piwb2q10xeoFL5dvxCesAtlBJSotZxukhtBzBeFcxbo')
         .end(function(err,pres){
         // 常规的错误处理
         if (err) {
           console.log(err.message.error);
           return;
         }
-        console.log(JSON.parse(pres.text).data.result.length);
-        // var $ = cheerio.load(pres.text, { decodeEntities: false });
-        // console.log($('.tabcontent').eq(2).html());
-        // console.log(`已经爬取了：${counter*5/60}分钟`.info);
-        // let time = (new Date()).format("yyyy-MM-dd hh:mm:ss");
-        // let addData = JSON.parse(pres.text).data;
-        // if(addData.totalPage > 1){
-        //     console.log('产品列表不止一页！'.error);
-        //     fs.appendFileSync('debug.txt', '\n\n产品列表不止一页！发生于：' + time);
-        // }
-        // let formatedAddData = formatData(addData.result);
-        // let oldData = JSON.parse(fs.readFileSync('product.json', 'utf-8'));
-        // oldData.push(formatedAddData);
-        // fs.writeFile('product.json', JSON.stringify(oldData), (err) => {
-        //     if (err) throw err;
-        //     console.log((`=============== 第${counter}次爬取，时间：${time} ===============`).silly);
-        // });
+        let result = JSON.parse(pres.text).data.result;
+        for(let i=0,len=result.length; i<len; i++){
+            pageUrls.push('https://www.lmlc.com/web/product/product_detail.html?id=' + result[i].id);
+        }
+        var reptileLink = function(url,callback){
+            // 如果爬取页面有限制爬取次数，这里可设置延迟
+            var delay = 0;
+            console.log( '正在抓取页面：' + url);
+            superagent
+                .get(url)
+                .set('Cookie', `NTES_SESS=${cookie}`)
+                .end(function(err,pres){
+                      // 常规的错误处理
+                    if (err) {
+                      console.log(err.message.error);
+                      return;
+                    }
+                    var $ = cheerio.load(pres.text);
+                    var records = [];
+                    var $tr = $('.tabcontent').eq(2).find('tr').slice(1);
+                    $tr.each(function(){
+                        records.push({
+                            username: $('td', $(this)).eq(0).text(),
+                            buyTime: Date.parse($('td', $(this)).eq(1).text()),
+                            buyAmount: parseFloat($('td', $(this)).eq(2).text().replace(/,/g, '')),
+                            uniqueId: $('td', $(this)).eq(0).text() + $('td', $(this)).eq(1).text() + $('td', $(this)).eq(2).text()
+                        })
+                    });
+                    
+                    setTimeout(function() {
+                        callback(null, {
+                            productId: url.split('?id=')[1],
+                            productName: $('.name').text(),
+                            records: records
+                        });
+                    }, delay);
+                });
+        };
+        async.mapLimit(pageUrls, 3 ,function (url, callback) {
+          reptileLink(url, callback);
+        }, function (err,result) {
+            console.log(`第${counter}次抓取的所有产品详情页完毕`.silly);
+            let oldRecord = JSON.parse(fs.readFileSync('record.json', 'utf-8'));
+            for(let i=0,len=result.length; i<len; i++){
+                let isNewProd = true;
+                for(let j=0,len2=oldRecord.length; j<len2; j++){
+                    if(result[i].productId === oldRecord[j].productId){
+                        isNewProd = false;
+                        for(let k=0,len3=result[i].records.length; k<len3; k++){
+                            let isNewRec = true;
+                            for(let m=0,len4=oldRecord[j].records.length; m<len4; m++){
+                                if(result[i].records[k].uniqueId === oldRecord[j].records[m].uniqueId){
+                                    isNewRec = false;
+                                }
+                            }
+                            if(isNewRec){
+                                oldRecord[j].records.unshift(result[i].records[k]);
+                            }
+                        }
+                    }
+                }
+                if(isNewProd){
+                    oldRecord.push(result[i]);
+                }
+            }
+            fs.writeFileSync('record.json', JSON.stringify(oldRecord));
+        })
     });
 }
 
