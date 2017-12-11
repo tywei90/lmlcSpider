@@ -251,8 +251,8 @@ function requestData() {
                         if (err) {
                             let errMsg = '';
                             if (err.message === 'Found') {
-                                errMsg = '登陆信息错误';
-                                // clearInterval(timer);
+                                errMsg = '登陆cookie已失效，尝试重新登陆...';
+                                getCookie();
                             }else if(err.message === 'ENOTFOUND'){
                                 errMsg = '网络连接错误，尝试重新请求...';
                             } else {
