@@ -43,6 +43,13 @@ if(!fs.existsSync('./data')){
     fs.mkdirSync('./data/');
 }
 
+function handleErr(msg){
+    let err = msg||'error';
+    let time = (new Date()).format("yyyy-MM-dd hh:mm:ss");
+    console.log(err.error);
+    fs.appendFileSync('debug.txt', `\n\n${err}, 发生于：${time}`);
+}
+
 // 定时器，每天00:05分的时候写入当天的数据
 let initialTime = +new Date();
 let globalTimer = setInterval(function(){
@@ -156,9 +163,7 @@ function getCookie() {
         })
         .end(function(err, res) {
             if (err) {
-                let time = (new Date()).format("yyyy-MM-dd hh:mm:ss");
-                console.log(err.message.error);
-                fs.appendFileSync('debug.txt', `\n\n${err.message.error}, 发生于：${time}`);
+                handleErr(err.message);
                 return;
             }
             cookie = res.header['set-cookie']; //从response中得到cookie
@@ -202,9 +207,7 @@ function requestData() {
     .end(function(err,pres){
         // 常规的错误处理
         if (err) {
-            let time = (new Date()).format("yyyy-MM-dd hh:mm:ss");
-            console.log(err.message.error);
-            fs.appendFileSync('debug.txt', `\n\n${err.message.error}, 发生于：${time}`);
+            handleErr(err.message);
             return;
         }
         let addData = JSON.parse(pres.text).data;
@@ -235,10 +238,25 @@ function requestData() {
                 oldData.push(formatedAddData[i]);
             }
         }
-        fs.writeFile('./data/prod.json', JSON.stringify(oldData), (err) => {
-            if (err) throw err;
-            let time = (new Date()).format("yyyy-MM-dd hh:mm:ss");
-            console.log((`第${counter}次爬取理财列表ajax接口完毕，时间：${time}`).warn);
+        fs.writeFileSync('./data/prod.json', JSON.stringify(oldData));
+        let time = (new Date()).format("yyyy-MM-dd hh:mm:ss");
+        console.log((`第${counter}次爬取理财列表ajax接口完毕，时间：${time}`).warn);
+        // 请求用户信息接口，来判断登录是否还有效，在产品详情页判断麻烦还要造成五次登录请求
+        superagent
+            .post('https://www.lmlc.com/s/web/m/user_info')
+            .set('Cookie', cookie)
+            .end(function(err,pres){
+            // 常规的错误处理
+            if (err) {
+                handleErr(err.message);
+                return;
+            }
+            let retcode = JSON.parse(pres.text).retcode;
+            if(retcode === 410){
+                handleErr('登陆cookie已失效，尝试重新登陆...');
+                getCookie();
+                return;
+            }
             var reptileLink = function(url,callback){
                 // 如果爬取页面有限制爬取次数，这里可设置延迟
                 console.log( '正在抓取产品详情页面：' + url);
@@ -247,26 +265,8 @@ function requestData() {
                     .set('Cookie', cookie)
                     .end(function(err,pres){
                         // 常规的错误处理
-                        let time = (new Date()).format("yyyy-MM-dd hh:mm:ss");
                         if (err) {
-                            let errMsg = '';
-                            if (err.message === 'Found') {
-                                errMsg = '登陆cookie已失效，尝试重新登陆...';
-                                getCookie();
-                            }else if(err.message === 'ENOTFOUND'){
-                                errMsg = '网络连接错误，尝试重新请求...';
-                            } else {
-                                errMsg = err.message;
-                            }
-                            console.log(errMsg.error);
-                            fs.appendFileSync('debug.txt', `\n\n${errMsg} 发生于：${time}`);
-                            return;
-                        }
-                        var $ = cheerio.load(pres.text);
-                        if ($('.m-login').length) {
-                            console.log('登陆cookie已失效，尝试重新登陆...'.error);
-                            fs.appendFileSync('debug.txt', `\n\n登陆cookie已失效，尝试重新登陆... 发生于：${time}`);
-                            getCookie();
+                            handleErr(err.message);
                             return;
                         }
                         var $ = cheerio.load(pres.text);
@@ -350,9 +350,7 @@ function requestData1() {
     .end(function(err,pres){
         // 常规的错误处理
         if (err) {
-            let time = (new Date()).format("yyyy-MM-dd hh:mm:ss");
-            console.log(err.message.error);
-            fs.appendFileSync('debug.txt', `\n\n${err.message.error}, 发生于：${time}`);
+            handleErr(err.message);
             return;
         }
         let newData = JSON.parse(pres.text).data;
