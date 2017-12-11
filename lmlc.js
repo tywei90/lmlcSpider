@@ -252,7 +252,7 @@ function requestData() {
                             let errMsg = '';
                             if (err.message === 'Found') {
                                 errMsg = '登陆信息错误';
-                                clearInterval(timer);
+                                // clearInterval(timer);
                             }else if(err.message === 'ENOTFOUND'){
                                 errMsg = '网络连接错误，尝试重新请求...';
                             } else {
