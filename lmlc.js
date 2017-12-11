@@ -47,7 +47,7 @@ function handleErr(msg){
     let err = msg||'error';
     let time = (new Date()).format("yyyy-MM-dd hh:mm:ss");
     console.log(err.error);
-    fs.appendFileSync('debug.txt', `\n\n${err}, 发生于：${time}`);
+    fs.appendFileSync('debug.txt', `${err}, 发生于：${time}\n\n`);
 }
 
 // 定时器，每天00:05分的时候写入当天的数据
@@ -213,9 +213,7 @@ function requestData() {
         let addData = JSON.parse(pres.text).data;
         let pageUrls = [];
         if(addData.totalPage > 1){
-            let time = (new Date()).format("yyyy-MM-dd hh:mm:ss");
-            console.log('产品个数超过100个！'.error);
-            fs.appendFileSync('debug.txt', '\n\n产品个数超过100个！发生于：' + time);
+            handleErr('产品个数超过100个！');
         }
         let formatedAddData = formatData(addData.result);
         for(let i=0,len=formatedAddData.length; i<len; i++){
