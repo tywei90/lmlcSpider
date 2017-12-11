@@ -131,8 +131,6 @@ let globalTimer = setInterval(function(){
 
 // 理财list页面ajax爬取已经对应的产品详情页爬取，生成文件: ./data/prod.json
 let cookie;
-let counter = 0;
-let total = 0; // 爬取的次数，为0则一直爬取
 let delay = 5*1000;
 // 防止产品多产生分页需要多次请求获取数据，可以直接设置pageSize为100，这样多页几乎不会出现
 let ajaxUrl = 'https://www.lmlc.com/web/product/product_list?pageSize=100&pageNo=1&type=0';
@@ -199,10 +197,6 @@ function formatData(data){
 }
 
 function requestData() {
-    counter++;
-    if(total && counter == total){
-        clearInterval(timer);
-    }
     superagent.get(ajaxUrl)
     .end(function(err,pres){
         // 常规的错误处理
@@ -238,7 +232,7 @@ function requestData() {
         }
         fs.writeFileSync('./data/prod.json', JSON.stringify(oldData));
         let time = (new Date()).format("yyyy-MM-dd hh:mm:ss");
-        console.log((`第${counter}次爬取理财列表ajax接口完毕，时间：${time}`).warn);
+        console.log((`理财列表ajax接口爬取完毕，时间：${time}`).warn);
         // 请求用户信息接口，来判断登录是否还有效，在产品详情页判断麻烦还要造成五次登录请求
         superagent
             .post('https://www.lmlc.com/s/web/m/user_info')
@@ -257,7 +251,7 @@ function requestData() {
             }
             var reptileLink = function(url,callback){
                 // 如果爬取页面有限制爬取次数，这里可设置延迟
-                console.log( '正在抓取产品详情页面：' + url);
+                console.log( '正在爬取产品详情页面：' + url);
                 superagent
                     .get(url)
                     .set('Cookie', cookie)
@@ -288,7 +282,7 @@ function requestData() {
               reptileLink(url, callback);
             }, function (err,result) {
                 let time = (new Date()).format("yyyy-MM-dd hh:mm:ss");
-                console.log(`第${counter}次抓取的所有产品详情页完毕，时间：${time}`.info);
+                console.log(`所有产品详情页爬取完毕，时间：${time}`.info);
                 let oldRecord = JSON.parse(fs.readFileSync('./data/prod.json', 'utf-8'));
                 for(let i=0,len=result.length; i<len; i++){
                     for(let j=0,len2=oldRecord.length; j<len2; j++){
@@ -315,8 +309,6 @@ function requestData() {
 
 
 // 首页用户购买情况ajax接口爬取，生成文件: ./data/user.json
-let counter1 = 0;
-let total1 = 0; // 爬取的次数，为0则一直爬取
 let delay1 = 150*1000; // 后台数据三分钟更新一次，所以这中间如果购买人超过10个的话，会漏掉这部分数据
 let ajaxUrl1 = 'https://www.lmlc.com/s/web/home/user_buying';
 
@@ -340,10 +332,6 @@ function formatData1(data){
 }
 
 function requestData1() {
-    counter1++;
-    if(total1 && counter1 == total1){
-        clearInterval(timer1);
-    }
     superagent.get(ajaxUrl1)
     .end(function(err,pres){
         // 常规的错误处理
@@ -358,7 +346,7 @@ function requestData1() {
             fs.writeFile('./data/user.json', JSON.stringify(formatNewData), (err) => {
                 if (err) throw err;
                 let time = (new Date()).format("yyyy-MM-dd hh:mm:ss");
-                console.log((`第${counter1}次爬取首页用户购买ajax完毕，时间：${time}`).silly);
+                console.log((`首页用户购买ajax爬取完毕，时间：${time}`).silly);
             });
         }else{
             let oldData = JSON.parse(data);
@@ -391,7 +379,7 @@ function requestData1() {
             fs.writeFile('./data/user.json', JSON.stringify(oldData.concat(addData)), (err) => {
                 if (err) throw err;
                 let time = (new Date()).format("yyyy-MM-dd hh:mm:ss");
-                console.log((`第${counter1}次爬取首页用户购买ajax完毕，时间：${time}`).silly);
+                console.log((`首页用户购买ajax爬取完毕，时间：${time}`).silly);
             });
         }
     });
