@@ -50,45 +50,51 @@ function handleErr(msg){
     fs.appendFileSync('debug.txt', `${err}, 发生于：${time}\n\n`);
 }
 
-// 定时器，每天00:05分的时候写入当天的数据
+// 定时器，处理生成数据
+let update = false;
 let initialTime = +new Date();
 let globalTimer = setInterval(function(){
     let nowTime = +new Date();
     let nowStr = (new Date()).format("hh:mm:ss");
     let max = nowTime - 5*60*1000;
     let min = nowTime - 5*60*1000 - 24*60*60*1000;
+    // 每天0点整记录产品接口的alreadyBuyAmount初始数据
+    if(nowStr === "00:00:00"){
+        update = true;
+    }
+    // 每天00:05分的时候写入当天的数据; 因为user接口是每隔三分钟才请求数据，这里预留五分钟确保数据的完整性
     if(nowStr === "00:05:00" && (nowTime - initialTime >= 5*60*1000 + 24*60*60*1000)){
         let prod = JSON.parse(fs.readFileSync('./data/prod.json', 'utf-8'));
         let user = JSON.parse(fs.readFileSync('./data/user.json', 'utf-8'));
         let lmlc = JSON.parse(JSON.stringify(prod));
         // 筛选prod数据
+        // 处理amounts数据
+        let str1 = (new Date(nowTime - 10*60*1000)).format("yyyyMMdd");
         for(let i=0, len=prod.length; i<len; i++){
-            // 筛选amounts属性数据
+            delete lmlc[i].amounts;
+            for(let j=0, len2=prod[i].amounts.length; j<len2; j++){
+                let str2 = (new Date(prod[i].amounts[j].getDataTime)).format("yyyyMMdd");
+                if(str1 === str2){
+                    lmlc[i].getDataTime = prod[i].amounts[j].getDataTime;
+                    lmlc[i].alreadyBuyAmount = prod[i].amounts[j].alreadyBuyAmount;
+                    break
+                }
+            }
+        }
+        // 筛选records数据
+        for(let i=0, len=prod.length; i<len; i++){
             let delArr1 = [];
             let delArr2 = [];
-            for(let j=0, len2=prod[i].amounts.length; j<len2; j++){
-                if(prod[i].amounts[j].getDataTime < min || prod[i].amounts[j].getDataTime >= max){
+            for(let j=0, len2=prod[i].records.length; j<len2; j++){
+                if(prod[i].records[j].buyTime < min || prod[i].records[j].buyTime >= max){
                     delArr1.push(j);
                 }
-                if(prod[i].amounts[j].getDataTime < max){
+                if(prod[i].records[j].buyTime < max){
                     delArr2.push(j);
                 }
             }
-            sort.delArrByIndex(lmlc[i].amounts, delArr1);
-            sort.delArrByIndex(prod[i].amounts, delArr2);
-            // 筛选records属性数据
-            let delArr3 = [];
-            let delArr4 = [];
-            for(let j=0, len2=prod[i].records.length; j<len2; j++){
-                if(prod[i].records[j].buyTime < min || prod[i].records[j].buyTime >= max){
-                    delArr3.push(j);
-                }
-                if(prod[i].records[j].buyTime < max){
-                    delArr4.push(j);
-                }
-            }
-            sort.delArrByIndex(lmlc[i].records, delArr3);
-            sort.delArrByIndex(prod[i].records, delArr4);
+            sort.delArrByIndex(lmlc[i].records, delArr1);
+            sort.delArrByIndex(prod[i].records, delArr2);
         }
         // 初始化lmlc里的立马金库数据
         lmlc.unshift({
@@ -115,7 +121,6 @@ let globalTimer = setInterval(function(){
         // 删除无用属性，按照时间排序
         lmlc[0].records.sort(function(a,b){return a.buyTime - b.buyTime});
         for(let i=1, len=lmlc.length; i<len; i++){
-            lmlc[i].amounts.sort(function(a,b){return a.getDataTime - b.getDataTime});
             lmlc[i].records.sort(function(a,b){return a.buyTime - b.buyTime});
             for(let j=0, len2=lmlc[i].records.length; j<len2; j++){
                 delete lmlc[i].records[j].uniqueId
@@ -186,6 +191,9 @@ function formatData(data){
         obj.investementDays = data[i].investementDays;
         obj.interestStartTime = (new Date(data[i].interestStartTime)).format("yyyy-MM-dd hh:mm:ss");
         obj.interestEndTime = (new Date(data[i].interestEndTime)).format("yyyy-MM-dd hh:mm:ss");
+        // 占位
+        obj.getDataTime = '';
+        obj.alreadyBuyAmount = '';
         obj.amounts = [{
             getDataTime: +new Date(),
             alreadyBuyAmount: data[i].alreadyBuyAmount
@@ -208,6 +216,7 @@ function requestData() {
         let pageUrls = [];
         if(addData.totalPage > 1){
             handleErr('产品个数超过100个！');
+            return;
         }
         let formatedAddData = formatData(addData.result);
         for(let i=0,len=formatedAddData.length; i<len; i++){
@@ -220,8 +229,7 @@ function requestData() {
             for(let j=0, len2=oldData.length; j<len2; j++){
                 if(formatedAddData[i].productId === oldData[j].productId){
                     isNewProduct = false;
-                    let lenx = oldData[j].amounts.length;
-                    if(!lenx || formatedAddData[i].amounts[0].alreadyBuyAmount !== oldData[j].amounts[lenx-1].alreadyBuyAmount){
+                    if(update){
                         oldData[j].amounts.push(formatedAddData[i].amounts[0]);
                     }
                 }
@@ -229,6 +237,9 @@ function requestData() {
             if(isNewProduct){
                 oldData.push(formatedAddData[i]);
             }
+        }
+        if(update){
+            update = false;
         }
         fs.writeFileSync('./data/prod.json', JSON.stringify(oldData));
         let time = (new Date()).format("yyyy-MM-dd hh:mm:ss");
