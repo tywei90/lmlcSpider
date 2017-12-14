@@ -51,51 +51,45 @@ function handleErr(msg){
 }
 
 // 定时器，处理生成数据
-let update = false;
+let clearProd = false;
+let clearUser = false;
 let initialTime = +new Date();
 let globalTimer = setInterval(function(){
     let nowTime = +new Date();
     let nowStr = (new Date()).format("hh:mm:ss");
-    let max = nowTime - 5*60*1000;
-    let min = nowTime - 5*60*1000 - 24*60*60*1000;
-    // 每天0点整记录产品接口的alreadyBuyAmount初始数据
+    let max = nowTime;
+    let min = nowTime - 24*60*60*1000;
+    // 每天00:00分的时候写入当天的数据
     if(nowStr === "00:00:00"){
-        update = true;
-    }
-    // 每天00:05分的时候写入当天的数据; 因为user接口是每隔三分钟才请求数据，这里预留五分钟确保数据的完整性
-    if(nowStr === "00:05:00" && (nowTime - initialTime >= 5*60*1000 + 24*60*60*1000)){
+        // 先保存数据
         let prod = JSON.parse(fs.readFileSync('./data/prod.json', 'utf-8'));
         let user = JSON.parse(fs.readFileSync('./data/user.json', 'utf-8'));
         let lmlc = JSON.parse(JSON.stringify(prod));
+        // 清空缓存数据
+        clearProd = true;
+        clearUser = true;
+        // 不足一天的不统计
+        if(nowTime - initialTime < 24*60*60*1000) return
         // 筛选prod数据
-        // 处理amounts数据
-        let str1 = (new Date(nowTime - 10*60*1000)).format("yyyyMMdd");
-        for(let i=0, len=prod.length; i<len; i++){
-            delete lmlc[i].amounts;
-            for(let j=0, len2=prod[i].amounts.length; j<len2; j++){
-                let str2 = (new Date(prod[i].amounts[j].getDataTime)).format("yyyyMMdd");
-                if(str1 === str2){
-                    lmlc[i].getDataTime = prod[i].amounts[j].getDataTime;
-                    lmlc[i].alreadyBuyAmount = prod[i].amounts[j].alreadyBuyAmount;
-                    break
-                }
-            }
-        }
         // 筛选records数据
         for(let i=0, len=prod.length; i<len; i++){
             let delArr1 = [];
-            let delArr2 = [];
             for(let j=0, len2=prod[i].records.length; j<len2; j++){
                 if(prod[i].records[j].buyTime < min || prod[i].records[j].buyTime >= max){
                     delArr1.push(j);
                 }
-                if(prod[i].records[j].buyTime < max){
-                    delArr2.push(j);
-                }
             }
             sort.delArrByIndex(lmlc[i].records, delArr1);
-            sort.delArrByIndex(prod[i].records, delArr2);
         }
+        // 删掉records为空的数据
+        let delArr2 = [];
+        for(let i=0, len=lmlc.length; i<len; i++){
+            if(!lmlc[i].records.length){
+                delArr2.push(i);
+            }
+        }
+        sort.delArrByIndex(lmlc, delArr2);
+
         // 初始化lmlc里的立马金库数据
         lmlc.unshift({
             "productName": "立马金库",
@@ -103,7 +97,6 @@ let globalTimer = setInterval(function(){
             "productType": 6,
             "records": []
         });
-        let delArr = [];
         // 筛选user数据
         for(let i=0, len=user.length; i<len; i++){
             if(user[i].productId === "jsfund" && user[i].buyTime >= min && user[i].buyTime < max){
@@ -113,11 +106,7 @@ let globalTimer = setInterval(function(){
                     "buyAmount": user[i].payAmount,
                 });
             }
-            if(user[i].buyTime < max){
-                delArr.push(i);
-            }
         }
-        sort.delArrByIndex(user, delArr);
         // 删除无用属性，按照时间排序
         lmlc[0].records.sort(function(a,b){return a.buyTime - b.buyTime});
         for(let i=1, len=lmlc.length; i<len; i++){
@@ -126,11 +115,9 @@ let globalTimer = setInterval(function(){
                 delete lmlc[i].records[j].uniqueId
             }
         }
-        // 写入前一天的数据，更新user.json和prod.json
+        // 写入前一天的数据，清空user.json和prod.json
         let dateStr = (new Date(nowTime - 10*60*1000)).format("yyyyMMdd");
         fs.writeFileSync(`./data/${dateStr}.json`, JSON.stringify(lmlc));
-        fs.writeFileSync('./data/prod.json', JSON.stringify(prod));
-        fs.writeFileSync('./data/user.json', JSON.stringify(user));
     }
 }, 1000);
 
@@ -191,13 +178,8 @@ function formatData(data){
         obj.investementDays = data[i].investementDays;
         obj.interestStartTime = (new Date(data[i].interestStartTime)).format("yyyy-MM-dd hh:mm:ss");
         obj.interestEndTime = (new Date(data[i].interestEndTime)).format("yyyy-MM-dd hh:mm:ss");
-        // 占位
-        obj.getDataTime = '';
-        obj.alreadyBuyAmount = '';
-        obj.amounts = [{
-            getDataTime: +new Date(),
-            alreadyBuyAmount: data[i].alreadyBuyAmount
-        }];
+        obj.getDataTime = +new Date();
+        obj.alreadyBuyAmount = data[i].alreadyBuyAmount;
         obj.records = [];
         outArr.push(obj);
     }
@@ -223,23 +205,22 @@ function requestData() {
             pageUrls.push('https://www.lmlc.com/web/product/product_detail.html?id=' + formatedAddData[i].productId);
         }
         // 处理售卖金额信息
+        // 在这里清空数据，避免一个文件被同时写入
+        if(clearProd){
+            fs.writeFileSync('./data/prod.json', JSON.stringify([]));
+            clearProd = false;
+        }
         let oldData = JSON.parse(fs.readFileSync('./data/prod.json', 'utf-8'));
         for(let i=0, len=formatedAddData.length; i<len; i++){
             let isNewProduct = true;
             for(let j=0, len2=oldData.length; j<len2; j++){
                 if(formatedAddData[i].productId === oldData[j].productId){
                     isNewProduct = false;
-                    if(update){
-                        oldData[j].amounts.push(formatedAddData[i].amounts[0]);
-                    }
                 }
             }
             if(isNewProduct){
                 oldData.push(formatedAddData[i]);
             }
-        }
-        if(update){
-            update = false;
         }
         fs.writeFileSync('./data/prod.json', JSON.stringify(oldData));
         let time = (new Date()).format("yyyy-MM-dd hh:mm:ss");
@@ -352,13 +333,16 @@ function requestData1() {
         }
         let newData = JSON.parse(pres.text).data;
         let formatNewData = formatData1(newData);
+        // 在这里清空数据，避免一个文件被同时写入
+        if(clearUser){
+            fs.writeFileSync('./data/user.json', '');
+            clearUser = false;
+        }
         let data = fs.readFileSync('./data/user.json', 'utf-8');
         if(!data){
-            fs.writeFile('./data/user.json', JSON.stringify(formatNewData), (err) => {
-                if (err) throw err;
-                let time = (new Date()).format("yyyy-MM-dd hh:mm:ss");
-                console.log((`首页用户购买ajax爬取完毕，时间：${time}`).silly);
-            });
+            fs.writeFileSync('./data/user.json', JSON.stringify(formatNewData));
+            let time = (new Date()).format("yyyy-MM-dd hh:mm:ss");
+            console.log((`首页用户购买ajax爬取完毕，时间：${time}`).silly);
         }else{
             let oldData = JSON.parse(data);
             let addData = [];
@@ -387,11 +371,9 @@ function requestData1() {
                     }
                 }
             }
-            fs.writeFile('./data/user.json', JSON.stringify(oldData.concat(addData)), (err) => {
-                if (err) throw err;
-                let time = (new Date()).format("yyyy-MM-dd hh:mm:ss");
-                console.log((`首页用户购买ajax爬取完毕，时间：${time}`).silly);
-            });
+            fs.writeFileSync('./data/user.json', JSON.stringify(oldData.concat(addData)));
+            let time = (new Date()).format("yyyy-MM-dd hh:mm:ss");
+            console.log((`首页用户购买ajax爬取完毕，时间：${time}`).silly);
         }
     });
 }
